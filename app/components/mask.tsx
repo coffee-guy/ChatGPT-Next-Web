@@ -16,7 +16,7 @@ import DragIcon from "../icons/drag.svg";
 import { DEFAULT_MASK_AVATAR, Mask, useMaskStore } from "../store/mask";
 import {
   ChatMessage,
-  createMessage,
+  createTempMessage,
   ModelConfig,
   ModelType,
   useAppConfig,
@@ -335,7 +335,7 @@ export function ContextPrompts(props: {
                           className={chatStyle["context-prompt-insert"]}
                           onClick={() => {
                             addContextPrompt(
-                              createMessage({
+                              createTempMessage({
                                 role: "user",
                                 content: "",
                                 date: new Date().toLocaleString(),
@@ -365,7 +365,7 @@ export function ContextPrompts(props: {
               className={chatStyle["context-prompt-button"]}
               onClick={() =>
                 addContextPrompt(
-                  createMessage({
+                  createTempMessage({
                     role: "user",
                     content: "",
                     date: "",

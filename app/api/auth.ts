@@ -27,6 +27,7 @@ function parseApiKey(bearToken: string) {
 export function auth(req: NextRequest) {
   const authToken = req.headers.get("Authorization") ?? "";
 
+  console.log("[Auth] authToken:", authToken);
   // check if it is openai api key or user token
   const { accessCode, apiKey } = parseApiKey(authToken);
 
@@ -52,6 +53,8 @@ export function auth(req: NextRequest) {
       msg: "you are not allowed to access openai with your own api key",
     };
   }
+
+  console.log("[Auth] apikey:", apiKey);
 
   // if user does not provide an api key, inject system api key
   if (!apiKey) {

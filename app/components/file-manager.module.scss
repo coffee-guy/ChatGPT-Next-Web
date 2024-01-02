@@ -1,0 +1,76 @@
+.file-manager {
+  padding: 20px;
+  overflow: hidden;
+  font-size: 14px;
+
+
+  .file-list-header, .file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+  }
+
+  .file-list-header, .file-item {
+    display: flex;
+    align-items: center;
+  }
+
+  .column-id {
+    user-select: text;
+    flex: 0 0 300px; // 例如，ID列宽度固定为50px
+  }
+
+  .column-filename {
+    user-select: text;
+    flex: 0 0  500px; // 文件名列占据剩余空间
+  }
+
+  .column-size {
+    flex: 0 0 80px; // 例如，大小列宽度固定为100px
+  }
+
+  .column-created {
+    flex: 0 0 150px; // 例如，创建时间列宽度固定为150px
+  }
+
+  .column-actions {
+    flex: 0 0 50px; // 例如，操作列宽度固定为100px
+  }
+
+  .file-list {
+    margin-bottom: 20px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .file-item {
+    //border-bottom: 1px solid #ccc;
+
+    span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      //margin-right: 5px;
+    }
+  }
+
+  // 滚动条样式
+  .file-list::-webkit-scrollbar {
+    height: 10px;
+  }
+
+  .file-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+
+  .file-list::-webkit-scrollbar-thumb {
+    background: #888;
+  }
+
+  .file-list::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
+
+  // 其他样式...
+}

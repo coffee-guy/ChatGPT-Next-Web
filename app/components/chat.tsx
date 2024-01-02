@@ -23,6 +23,8 @@ import ResetIcon from "../icons/reload.svg";
 import BreakIcon from "../icons/break.svg";
 import SettingsIcon from "../icons/chat-settings.svg";
 import DeleteIcon from "../icons/clear.svg";
+import AddIcon from "../icons/add.svg";
+
 import PinIcon from "../icons/pin.svg";
 import EditIcon from "../icons/rename.svg";
 import ConfirmIcon from "../icons/confirm.svg";
@@ -40,7 +42,7 @@ import {
   SubmitKey,
   useChatStore,
   BOT_HELLO,
-  createMessage,
+  createTempMessage,
   useAccessStore,
   Theme,
   useAppConfig,
@@ -705,7 +707,7 @@ function _Chat() {
       return;
     }
     setIsLoading(true);
-    chatStore.onUserInput(userInput).then(() => setIsLoading(false));
+    chatStore.onUserInputForSession(userInput).then(() => setIsLoading(false));
     localStorage.setItem(LAST_INPUT_KEY, userInput);
     setUserInput("");
     setPromptHints([]);
@@ -853,7 +855,9 @@ function _Chat() {
 
     // resend the message
     setIsLoading(true);
-    chatStore.onUserInput(userMessage.content).then(() => setIsLoading(false));
+    chatStore
+      .onUserInputForSession(userMessage.content)
+      .then(() => setIsLoading(false));
     inputRef.current?.focus();
   };
 
@@ -894,7 +898,7 @@ function _Chat() {
         isLoading
           ? [
               {
-                ...createMessage({
+                ...createTempMessage({
                   role: "assistant",
                   content: "……",
                 }),
@@ -907,7 +911,7 @@ function _Chat() {
         userInput.length > 0 && config.sendPreviewBubble
           ? [
               {
-                ...createMessage({
+                ...createTempMessage({
                   role: "user",
                   content: userInput,
                 }),
@@ -1325,5 +1329,14 @@ function _Chat() {
 export function Chat() {
   const chatStore = useChatStore();
   const sessionIndex = chatStore.currentSessionIndex;
+  useEffect(() => {
+    // 这里的代码会在组件挂载后执行
+    console.log("Chat 组件已挂载");
+
+    // 返回一个清理函数，这个函数会在组件卸载前执行
+    return () => {
+      console.log("Chat 组件将要卸载");
+    };
+  }, []); // 空依赖数组意味着这个 effect 只会在组件挂载和卸载时运行一次
   return <_Chat key={sessionIndex}></_Chat>;
 }

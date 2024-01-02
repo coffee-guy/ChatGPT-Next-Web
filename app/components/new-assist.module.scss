@@ -1,0 +1,65 @@
+.create-new-assistant {
+  padding: 20px;
+  overflow: auto;
+
+  .form-group {
+    margin-bottom: 20px;
+  }
+
+  .form-label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+
+  .form-input,
+  .form-select,
+  .form-textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    margin-bottom: 10px;
+  }
+
+  .chat-input-send {
+    background-color: var(--primary);
+    color: white;
+
+    margin-top: 40px;
+    position: absolute;
+    right: 30px;
+    bottom: 32px;
+  }
+
+  .form-checkbox-group {
+    display: flex;
+    align-items: center;
+
+    .form-checkbox {
+      margin-right: 5px;
+    }
+
+    label {
+      margin-right: 20px;
+    }
+  }
+
+  .button-group {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .file-upload-input {
+    display: none;
+  }
+
+  .file-upload-label {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+}

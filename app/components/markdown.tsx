@@ -163,7 +163,7 @@ export function Markdown(
   } & React.DOMAttributes<HTMLDivElement>,
 ) {
   const mdRef = useRef<HTMLDivElement>(null);
-
+  // console.log("[MARKDOWN] props:",props)
   return (
     <div
       className="markdown-body"

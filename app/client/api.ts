@@ -1,7 +1,8 @@
 import { getClientConfig } from "../config/client";
 import { ACCESS_CODE_PREFIX, Azure, ServiceProvider } from "../constant";
-import { ChatMessage, ModelType, useAccessStore } from "../store";
+import { ChatMessage, ChatStat, ModelType, useAccessStore } from "../store";
 import { ChatGPTApi } from "./platforms/openai";
+import { Mask } from "@/app/store/mask";
 
 export const ROLES = ["system", "user", "assistant"] as const;
 export type MessageRole = (typeof ROLES)[number];
@@ -21,6 +22,20 @@ export interface LLMConfig {
   stream?: boolean;
   presence_penalty?: number;
   frequency_penalty?: number;
+}
+
+export interface ChatSession {
+  id: string;
+  topic: string;
+
+  memoryPrompt: string;
+  messages: ChatMessage[];
+  stat: ChatStat;
+  lastUpdate: number;
+  lastSummarizeIndex: number;
+  clearContextIndex?: number;
+
+  mask: Mask;
 }
 
 export interface ChatOptions {
@@ -45,7 +60,9 @@ export interface LLMModel {
 
 export abstract class LLMApi {
   abstract chat(options: ChatOptions): Promise<void>;
+
   abstract usage(): Promise<LLMUsage>;
+
   abstract models(): Promise<LLMModel[]>;
 }
 
@@ -71,7 +88,7 @@ interface ChatProvider {
 }
 
 export class ClientApi {
-  public llm: LLMApi;
+  public llm: ChatGPTApi;
 
   constructor() {
     this.llm = new ChatGPTApi();
@@ -130,9 +147,11 @@ export function getHeaders() {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "x-requested-with": "XMLHttpRequest",
+    "OpenAI-Beta": "assistants=v1",
   };
 
   const isAzure = accessStore.provider === ServiceProvider.Azure;
+  console.log("[API] isAzure:", isAzure);
   const authHeader = isAzure ? "api-key" : "Authorization";
   const apiKey = isAzure ? accessStore.azureApiKey : accessStore.openaiApiKey;
 

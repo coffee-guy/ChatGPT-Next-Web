@@ -9,13 +9,15 @@ import styles from "./home.module.scss";
 import BotIcon from "../icons/bot.svg";
 import LoadingIcon from "../icons/three-dots.svg";
 
-import { getCSSVar, useMobileScreen } from "../utils";
+import { getCSSVar, getDateStr, useMobileScreen } from "../utils";
 
 import dynamic from "next/dynamic";
 import { Path, SlotID } from "../constant";
 import { ErrorBoundary } from "./error";
 
 import { getISOLang, getLang } from "../locales";
+
+import { useChatStore } from "../store";
 
 import {
   HashRouter as Router,
@@ -47,6 +49,17 @@ const Chat = dynamic(async () => (await import("./chat")).Chat, {
   loading: () => <Loading noLogo />,
 });
 
+const ThreadChat = dynamic(async () => (await import("./threadchat")).Chat, {
+  loading: () => <Loading noLogo />,
+});
+
+const FilesManager = dynamic(
+  async () => (await import("./file-manager")).FileManager,
+  {
+    loading: () => <Loading noLogo />,
+  },
+);
+
 const NewChat = dynamic(async () => (await import("./new-chat")).NewChat, {
   loading: () => <Loading noLogo />,
 });
@@ -54,6 +67,13 @@ const NewChat = dynamic(async () => (await import("./new-chat")).NewChat, {
 const MaskPage = dynamic(async () => (await import("./mask")).MaskPage, {
   loading: () => <Loading noLogo />,
 });
+
+const NewAssist = dynamic(
+  async () => (await import("./new-assist")).CreateNewAssistant,
+  {
+    loading: () => <Loading noLogo />,
+  },
+);
 
 export function useSwitchTheme() {
   const config = useAppConfig();
@@ -128,7 +148,8 @@ function Screen() {
   const isHome = location.pathname === Path.Home;
   const isAuth = location.pathname === Path.Auth;
   const isMobileScreen = useMobileScreen();
-  const shouldTightBorder = getClientConfig()?.isApp || (config.tightBorder && !isMobileScreen);
+  const shouldTightBorder =
+    getClientConfig()?.isApp || (config.tightBorder && !isMobileScreen);
 
   useEffect(() => {
     loadAsyncGoogleFont();
@@ -158,6 +179,9 @@ function Screen() {
               <Route path={Path.Masks} element={<MaskPage />} />
               <Route path={Path.Chat} element={<Chat />} />
               <Route path={Path.Settings} element={<Settings />} />
+              <Route path={Path.NewAssist} element={<NewAssist />} />
+              <Route path={Path.ThreadChat} element={<ThreadChat />} />
+              <Route path={Path.Files} element={<FilesManager />} />
             </Routes>
           </div>
         </>
@@ -168,11 +192,21 @@ function Screen() {
 
 export function useLoadData() {
   const config = useAppConfig();
+  const chatStore = useChatStore();
 
   useEffect(() => {
     (async () => {
+      console.log(111);
+      console.log(getDateStr());
       const models = await api.llm.models();
+      console.log(getDateStr());
       config.mergeModels(models);
+
+      //load assistant
+      chatStore.fetchAssistants();
+      console.log(getDateStr());
+
+      //todo add to store
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

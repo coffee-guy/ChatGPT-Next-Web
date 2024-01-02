@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 
 import styles from "./home.module.scss";
 
@@ -143,6 +143,12 @@ export function SideBar(props: { className?: string }) {
 
   useHotKey();
 
+  const [currentTab, setCurrentTab] = useState("session");
+  // 修改onTabChange函数来更新currentTab状态
+  const onTabChange = (tabId: string) => {
+    setCurrentTab(tabId);
+  };
+
   return (
     <div
       className={`${styles.sidebar} ${props.className} ${
@@ -168,22 +174,20 @@ export function SideBar(props: { className?: string }) {
       <div className={styles["sidebar-header-bar"]}>
         <IconButton
           icon={<MaskIcon />}
-          text={shouldNarrow ? undefined : Locale.Mask.Name}
+          text={shouldNarrow ? undefined : "文件管理"}
           className={styles["sidebar-bar-button"]}
           onClick={() => {
-            if (config.dontShowMaskSplashScreen !== true) {
-              navigate(Path.NewChat, { state: { fromHome: true } });
-            } else {
-              navigate(Path.Masks, { state: { fromHome: true } });
-            }
+            navigate(Path.Files);
           }}
           shadow
         />
         <IconButton
           icon={<PluginIcon />}
-          text={shouldNarrow ? undefined : Locale.Plugin.Name}
+          text={shouldNarrow ? undefined : "Assistant管理"}
           className={styles["sidebar-bar-button"]}
-          onClick={() => showToast(Locale.WIP)}
+          onClick={() => {
+            //todo
+          }}
           shadow
         />
       </div>
@@ -196,7 +200,7 @@ export function SideBar(props: { className?: string }) {
           }
         }}
       >
-        <ChatList narrow={shouldNarrow} />
+        <ChatList narrow={shouldNarrow} onTabChange={onTabChange} />
       </div>
 
       <div className={styles["sidebar-tail"]}>
@@ -225,13 +229,22 @@ export function SideBar(props: { className?: string }) {
         <div>
           <IconButton
             icon={<AddIcon />}
-            text={shouldNarrow ? undefined : Locale.Home.NewChat}
+            text={
+              shouldNarrow
+                ? undefined
+                : currentTab === "session"
+                ? Locale.Home.NewChat
+                : "新的Assistant"
+            }
             onClick={() => {
-              if (config.dontShowMaskSplashScreen) {
+              //mvvm模式,chatstore更新后列表自动更新了
+              if (currentTab === "session") {
                 chatStore.newSession();
                 navigate(Path.Chat);
-              } else {
-                navigate(Path.NewChat);
+              } else if (currentTab === "assistant") {
+                //todo create new assistant
+                showToast("create new assistant");
+                navigate(Path.NewAssist);
               }
             }}
             shadow

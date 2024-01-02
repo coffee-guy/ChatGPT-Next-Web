@@ -32,7 +32,16 @@ async function handle(
 
   const subpath = params.path.join("/");
 
-  if (!ALLOWD_PATH.has(subpath)) {
+  let hasPrefix = false;
+
+  for (const item of ALLOWD_PATH) {
+    if (subpath.startsWith(item)) {
+      hasPrefix = true;
+      break; // 找到一个匹配的前缀后，退出循环
+    }
+  }
+
+  if (!hasPrefix) {
     console.log("[OpenAI Route] forbidden path ", subpath);
     return NextResponse.json(
       {
@@ -66,13 +75,32 @@ async function handle(
 
     return response;
   } catch (e) {
-    console.error("[OpenAI] ", e);
+    console.error("[OPENAI] ", e);
     return NextResponse.json(prettyObject(e));
   }
 }
 
 export const GET = handle;
 export const POST = handle;
+export const DELETE = handle;
 
 export const runtime = "edge";
-export const preferredRegion = ['arn1', 'bom1', 'cdg1', 'cle1', 'cpt1', 'dub1', 'fra1', 'gru1', 'hnd1', 'iad1', 'icn1', 'kix1', 'lhr1', 'pdx1', 'sfo1', 'sin1', 'syd1'];
+export const preferredRegion = [
+  "arn1",
+  "bom1",
+  "cdg1",
+  "cle1",
+  "cpt1",
+  "dub1",
+  "fra1",
+  "gru1",
+  "hnd1",
+  "iad1",
+  "icn1",
+  "kix1",
+  "lhr1",
+  "pdx1",
+  "sfo1",
+  "sin1",
+  "syd1",
+];

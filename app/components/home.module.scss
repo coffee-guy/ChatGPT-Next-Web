@@ -177,7 +177,26 @@
   content-visibility: auto;
 }
 
+.assistant-item {
+  flex: 1;
+  padding: 10px 14px;
+  background-color: var(--white);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  box-shadow: var(--card-shadow);
+  transition: background-color 0.3s ease;
+  cursor: pointer;
+  user-select: none;
+  border: 2px solid transparent;
+  position: relative;
+  content-visibility: auto;
+}
+
 .chat-item:hover {
+  background-color: var(--hover-color);
+}
+
+.assistant-item:hover {
   background-color: var(--hover-color);
 }
 
@@ -196,6 +215,15 @@
   animation: slide-in ease 0.3s;
 }
 
+.assistant-item-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transition: all ease 0.3s;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .chat-item-delete {
   position: absolute;
   top: 0;
@@ -203,6 +231,41 @@
   transition: all ease 0.3s;
   opacity: 0;
   cursor: pointer;
+}
+
+.assistant-container {
+  display: flex;
+  align-items: center; /* 如果需要垂直居中 */
+  justify-content: space-between; /* 使子元素分布在两端 */
+
+  /* 其他样式 */
+}
+
+
+.chat-item-add {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* 使按钮靠右对齐 */
+  margin-left: auto; /* 这个属性可能不再需要，因为 justify-content 已经处理了对齐 */
+  padding: 5px;
+  cursor: pointer;
+  width: 20px; /* 设置固定宽度 */
+}
+
+.add-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%; /* 圆角 */
+  background-color: #f0f0f0; /* 背景色 */
+  color: #333; /* 图标颜色 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.assistant-item:hover > .assistant-item-delete {
+  opacity: 0.5;
+  transform: translateX(-4px);
 }
 
 .chat-item:hover > .chat-item-delete {
@@ -338,3 +401,110 @@
 .rtl-screen {
   direction: rtl;
 }
+
+/* Tabs.module.css */
+.tabs {
+  display: flex;
+  justify-content: space-between; /* 确保Tab之间的间隔均匀 */
+  background-color: #f9f9f9;
+  padding: 0;
+  margin: 0 0 10px 0; /* 在底部添加10px的边距 */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tab {
+  flex: 1; /* 每个Tab都占用相同的空间 */
+  text-align: center; /* 文本居中 */
+  padding: 10px 20px;
+  cursor: pointer;
+  background-color: #e0e0e0;
+  transition: background-color 0.3s ease;
+  border: none;
+  outline: none;
+  font-weight: 500;
+  color: #333;
+  user-select: none;
+}
+
+.first-list {
+  margin-right: 20px;
+  //padding-left: 20px; /* 增加缩进以增强层次感 */
+}
+
+/* 子列表样式，保持与父项一致 */
+.sub-list {
+  margin-top: 10px;
+  border-left: 2px solid #ccc;
+  padding-left: 20px; /* 增加缩进以增强层次感 */
+}
+
+/* 子列表项样式，保持与父项一致 */
+.sub-list-item {
+  padding: 10px 14px;
+  background-color: var(--white);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  box-shadow: var(--card-shadow);
+  transition: background-color 0.3s ease;
+  cursor: pointer;
+  user-select: none;
+  border: 2px solid transparent;
+  position: relative;
+  content-visibility: auto;
+}
+
+/* 子列表项悬停效果 */
+.sub-list-item:hover {
+  background-color: var(--hover-color);
+}
+
+/* 子列表项选中效果 */
+.sub-list-item-selected {
+  border-color: var(--primary);
+}
+
+/* 子列表项标题样式 */
+.sub-list-item-title {
+  font-size: 14px;
+  font-weight: bolder;
+  display: block;
+  width: calc(100% - 15px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: slide-in ease 0.3s;
+}
+
+/* 子列表项删除按钮样式 */
+.sub-list-item-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transition: all ease 0.3s;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* 子列表项添加按钮样式 */
+.sub-list-item-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto; /* 使按钮靠右对齐 */
+  padding: 8px;
+  cursor: pointer;
+}
+
+.tab:hover {
+  background-color: #d0d0d0;
+}
+
+.active {
+  background-color: white;
+  color: #007bff;
+  box-shadow: inset 0 -3px 0 0 #007bff;
+}
+
+

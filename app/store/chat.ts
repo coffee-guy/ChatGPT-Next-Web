@@ -8,15 +8,26 @@ import {
   DEFAULT_INPUT_TEMPLATE,
   DEFAULT_SYSTEM_TEMPLATE,
   KnowledgeCutOffDate,
+  LAST_INPUT_KEY,
   StoreKey,
   SUMMARIZE_MODEL,
 } from "../constant";
-import { api, RequestMessage } from "../client/api";
+import { api, ChatSession, RequestMessage } from "../client/api";
 import { ChatControllerPool } from "../client/controller";
 import { prettyObject } from "../utils/format";
 import { estimateTokenLength } from "../utils/token";
 import { nanoid } from "nanoid";
 import { createPersistStore } from "../utils/store";
+import {
+  ChatGPTAssistant,
+  ChatGPTMessage,
+  ChatGPTThread,
+  ChatGPTFile,
+  OpenAIListAssistantResponse,
+} from "@/app/client/platforms/openai";
+import { threadId } from "node:worker_threads";
+import assert from "node:assert";
+import { useNavigate } from "react-router-dom";
 
 export type ChatMessage = RequestMessage & {
   date: string;
@@ -26,12 +37,24 @@ export type ChatMessage = RequestMessage & {
   model?: ModelType;
 };
 
-export function createMessage(override: Partial<ChatMessage>): ChatMessage {
+export function createTempMessage(override: Partial<ChatMessage>): ChatMessage {
   return {
     id: nanoid(),
     date: new Date().toLocaleString(),
     role: "user",
     content: "",
+    ...override,
+  };
+}
+
+export function createTempChatGPTMessage(
+  threadId: string,
+  override: Partial<ChatGPTMessage>,
+) {
+  return {
+    id: nanoid(),
+    threadId: threadId,
+    // createAt: Math.floor(new Date().getTime() / 1000),
     ...override,
   };
 }
@@ -42,22 +65,8 @@ export interface ChatStat {
   charCount: number;
 }
 
-export interface ChatSession {
-  id: string;
-  topic: string;
-
-  memoryPrompt: string;
-  messages: ChatMessage[];
-  stat: ChatStat;
-  lastUpdate: number;
-  lastSummarizeIndex: number;
-  clearContextIndex?: number;
-
-  mask: Mask;
-}
-
 export const DEFAULT_TOPIC = Locale.Store.DefaultTopic;
-export const BOT_HELLO: ChatMessage = createMessage({
+export const BOT_HELLO: ChatMessage = createTempMessage({
   role: "assistant",
   content: Locale.Store.BotHello,
 });
@@ -118,7 +127,11 @@ function fillTemplateWith(input: string, modelConfig: ModelConfig) {
 
 const DEFAULT_CHAT_STATE = {
   sessions: [createEmptySession()],
+  assistants: [] as ChatGPTAssistant[],
   currentSessionIndex: 0,
+  currentAssistantId: "",
+  currentThreadId: "",
+  files: [] as ChatGPTFile[],
 };
 
 export const useChatStore = createPersistStore(
@@ -132,6 +145,369 @@ export const useChatStore = createPersistStore(
     }
 
     const methods = {
+      async listFiles() {
+        const oldFiles = get().files.slice();
+        const files = await api.llm.listFiles();
+        const mergedList: ChatGPTFile[] = [];
+
+        // 将第一个列表的元素添加到新数组中
+        oldFiles.forEach((item) => {
+          mergedList.push(item);
+        });
+
+        files.forEach((item) => {
+          // 检查新数组中是否已经存在具有相同id的元素
+          const existingItem = mergedList.find(
+            (existing) => existing.id === item.id,
+          );
+          if (!existingItem) {
+            mergedList.push(item);
+          }
+        });
+
+        mergedList.sort((a, b) => a.createdAt - b.createdAt);
+
+        set(() => ({
+          files: mergedList,
+        }));
+      },
+
+      async uploadFile(file: File) {
+        const files = get().files.slice();
+        const fileUploaded = await api.llm.uploadFile({
+          file: file,
+          purpose: "assistant",
+        });
+
+        files.unshift(fileUploaded);
+        set(() => ({
+          files: files,
+        }));
+      },
+
+      async deleteFile(fileId: string) {
+        const deleteResponse = await api.llm.deleteFile(fileId);
+        if (deleteResponse.deleted) {
+          const files = get().files.slice();
+          const newFiles = files.filter((f, i, a) => {
+            return !(f.id === fileId);
+          });
+          set(() => ({
+            files: newFiles,
+          }));
+        }
+      },
+
+      async fetchAssistants() {
+        const assistantResponse = await api.llm.listAssistants();
+        // console.log("[CHAT] fetchAssistants:",assistantResponse)
+        set((state) => {
+          const {
+            sessions,
+            assistants: oldAssistants,
+            currentSessionIndex: oldIndex,
+          } = state;
+          const mergedList: ChatGPTAssistant[] = [];
+
+          // 将第一个列表的元素添加到新数组中
+          oldAssistants.forEach((item) => {
+            // 检查createNewAssistant是否包含id字段
+            if (item && item.id) {
+              if (!item.threads) {
+                item.threads = [];
+              }
+              mergedList.push(item);
+            } else {
+              // 处理错误情况，例如抛出错误或者设置错误状态
+              console.error(
+                "[CHAT]fetchAssistants merge error:Find Corrupted Assistant, abandon|",
+                item,
+              );
+            }
+          });
+
+          assistantResponse.data.forEach((item) => {
+            // 检查新数组中是否已经存在具有相同id的元素
+            const existingItem = mergedList.find(
+              (existing) => existing.id === item.id,
+            );
+            if (!existingItem) {
+              // 如果不存在，则添加到新数组中
+              if (!item.threads) {
+                item.threads = [];
+              }
+              mergedList.push(item);
+            } else {
+              // update
+              existingItem.name = item.name;
+              existingItem.description = item.description;
+              existingItem.fileIds = item.fileIds;
+              existingItem.model = item.model;
+              existingItem.tools = item.tools;
+              existingItem.instructions = item.instructions;
+            }
+          });
+
+          mergedList.sort((a, b) => b.createdAt - a.createdAt);
+          console.log("[CHAT] mergedAssistantList:", mergedList);
+
+          return {
+            assistants: mergedList,
+          };
+        });
+      },
+
+      async createAssistant(req: {
+        name: string;
+        description?: string;
+        instructions?: string;
+        model: string;
+        fileIds?: string[];
+        tools?: { type: string }[];
+      }) {
+        const assistant = await api.llm.createAssistant(req);
+        // console.log("[CHAT] createAssistant:", assistant)
+        const assistants = get().assistants.slice();
+        if (!assistant.threads) {
+          assistant.threads = [];
+        }
+        assistants.push(assistant);
+        assistants.sort((a, b) => b.createdAt - a.createdAt);
+        set(() => ({
+          assistants: assistants,
+        }));
+      },
+
+      async deleteAssistant(deleteAssistant: ChatGPTAssistant) {
+        const deletingLastAssistant = get().assistants.length === 1;
+        const deleteIdx = get().assistants.findIndex(
+          (assis) => assis.id === deleteAssistant.id,
+        );
+        if (!deleteAssistant || deleteIdx === -1) {
+          console.error("[CHAT] deletingAssistant|ERROR|not exist");
+          return;
+        }
+
+        //调用api删除
+        const assistantDeleteResponse =
+          await api.llm.deleteAssistant(deleteAssistant);
+        if (assistantDeleteResponse.deleted) {
+          const assistants = get().assistants.slice();
+          assistants.splice(deleteIdx, 1);
+
+          // const currentIndex = get().currentAssistantIndex;
+          // let nextIndex = Math.min(
+          //     currentIndex - Number(index < currentIndex),
+          //     assistants.length - 1,
+          // );
+          //
+          // if (deletingLastAssistant) {
+          //     nextIndex = 0;
+          //     // assistant 不用push empty
+          //     // assistants.push(createEmptySession());
+          // }
+          set(() => ({
+            assistants: assistants,
+          }));
+          showToast(
+            Locale.Home.DeleteAssistantSuccessToast(deleteAssistant.name),
+          );
+        } else {
+          showToast(Locale.Home.DeleteAssistantFailToast);
+        }
+      },
+
+      async createThread(assistant: ChatGPTAssistant) {
+        const assistants = get().assistants.slice();
+        const bondAssistant = assistants.find((i) => i.id === assistant.id);
+        if (bondAssistant) {
+          const newThread = await api.llm.createThread();
+          if (!newThread.data) {
+            newThread.data = [];
+          }
+          bondAssistant.threads.unshift(newThread);
+          bondAssistant.threads.sort((a, b) => a.createdAt - b.createdAt);
+          set(() => ({
+            assistants: assistants,
+            currentThreadId: newThread.id,
+          }));
+        } else {
+          showToast(Locale.Home.CreateThreadFail);
+        }
+      },
+
+      async deleteThread(
+        assistantId: string,
+        threadId: string,
+        noThreadLeft: () => void,
+      ) {
+        const assistants = get().assistants.slice();
+        const refAssistant = assistants.find((e) => e.id === assistantId);
+        const deleteThread = refAssistant?.threads.find(
+          (e) => e.id === threadId,
+        );
+        const deletingLastThread = refAssistant?.threads.length === 1;
+        const currentThreadIdx = refAssistant?.threads.findIndex(
+          (i) => i.id === get().currentThreadId,
+        );
+        const currentThreadId = get().currentThreadId;
+        console.log(
+          currentThreadIdx,
+          deletingLastThread,
+          get().currentThreadId,
+          threadId,
+        );
+        if (!refAssistant || !deleteThread) {
+          return;
+        }
+        const deleteThreadIdx = refAssistant?.threads.indexOf(deleteThread);
+
+        //调用api删除
+        const threadDeleteResponse = await api.llm.deleteThread(threadId);
+        if (threadDeleteResponse.deleted) {
+          console.log(111);
+          refAssistant.threads.splice(deleteThreadIdx, 1);
+          console.log(currentThreadIdx);
+
+          if (currentThreadIdx === undefined || currentThreadIdx === -1) {
+            console.log(222);
+            //当前激活的thread不在本地被删除thread的assistant中
+            set(() => ({
+              assistants: assistants,
+            }));
+          } else if (currentThreadId === threadId) {
+            //激活thread和删除thread在一个assist中，且删除thread就是当前激活thread
+            if (!deletingLastThread) {
+              console.log(333);
+
+              let newThreadId = refAssistant.threads.at(0)?.id;
+              if (!newThreadId) {
+                //回到初始化
+                newThreadId = "";
+              }
+              set(() => ({
+                assistants: assistants,
+                currentThreadId: newThreadId,
+              }));
+            } else {
+              console.log(444);
+              //删除的就是最后一个
+              set(() => ({
+                assistants: assistants,
+                currentThreadId: "",
+              }));
+              noThreadLeft();
+            }
+          } else {
+            console.log(555);
+            //当前激活的thread和被删除的thread在同一个assis中，但不相同
+            set((ƒs) => ({
+              assistants: assistants,
+            }));
+          }
+          showToast(Locale.Home.DeleteAssistantSuccessToast(refAssistant.name));
+        } else {
+          showToast(Locale.Home.DeleteAssistantFailToast);
+        }
+      },
+
+      async createMessage(content: string) {
+        const threadId = get().currentThreadId;
+        const assistantId = get().currentAssistantId;
+        const assistants = get().assistants.slice();
+        const createMessageResult = await api.llm.createMessage(
+          threadId,
+          content,
+        );
+        if (createMessageResult) {
+          //add
+          // console.log('[CREATE message]:', createMessageResult)
+          // assistants.find(e => e.id === assistantId)?.threads.find(e => e.id === threadId)?.data.push(createMessageResult)
+          // console.log("[CREATE message] list|",assistants)
+          // set(() => ({
+          //     assistants: assistants,
+          // }));
+          this.updateCurrentThread((thread) => {
+            thread?.data.push(createMessageResult);
+          });
+        }
+      },
+
+      async createRun(assistantId: string, threadId: string) {
+        //create run
+        return await api.llm.createRun(threadId, assistantId);
+      },
+
+      async loopRetrieveRun(
+        threadId: string,
+        runId: string,
+        callback: (onNewMessage: ChatGPTMessage) => void,
+      ) {
+        const checkRunStatus = async () => {
+          try {
+            const runStatus = await api.llm.retrieveRun(threadId, runId);
+            if (runStatus && runStatus.status === "completed") {
+              // 如果状态成功，处理结果并清除定时器
+              clearInterval(intervalId);
+              // 处理结果...
+              console.log("[CHAT] Run succeeded:", runStatus.id);
+              // list message
+              let messageListRes = await api.llm.listMessages({
+                threadId: threadId,
+                order: "asc",
+              });
+
+              const assistants = get().assistants.slice();
+              const assistant = assistants.find(
+                (assit) => assit.id === get().currentAssistantId,
+              );
+              const thread = assistant?.threads.find(
+                (thread) => thread.id === threadId,
+              );
+
+              if (
+                thread &&
+                messageListRes.data.length > 0 &&
+                messageListRes.data.at(messageListRes.data.length - 1)?.role ===
+                  "assistant"
+              ) {
+                //merge messages
+                let newMsg = messageListRes.data.pop();
+                if (newMsg) {
+                  thread?.data.push(newMsg);
+                  callback(newMsg);
+                  set(() => ({
+                    assistants: assistants,
+                  }));
+                }
+              }
+            } else if (
+              runStatus &&
+              (runStatus.status === "requires_action" ||
+                runStatus.status === "failed" ||
+                runStatus.status === "cancelled" ||
+                runStatus.status === "expired")
+            ) {
+              // 如果状态失败，也清除定时器
+              clearInterval(intervalId);
+              console.error(
+                "[CHAT] Run failed:",
+                runStatus.status,
+                runStatus.id,
+              );
+            }
+            // 如果状态是其他（例如pending），定时器会继续运行
+          } catch (error) {
+            // 如果请求失败，清除定时器并打印错误
+            clearInterval(intervalId);
+            console.error("[CHAT] Error retrieving run status:", error);
+          }
+        };
+
+        // 设置定时器，每3秒调用一次checkRunStatus函数
+        const intervalId = setInterval(checkRunStatus, 2000);
+      },
+
       clearSessions() {
         set(() => ({
           sessions: [createEmptySession()],
@@ -142,6 +518,14 @@ export const useChatStore = createPersistStore(
       selectSession(index: number) {
         set({
           currentSessionIndex: index,
+        });
+      },
+
+      selectThread(assistantId: string, threadIdx: string) {
+        console.log("[CHAT] selectThread:", threadIdx);
+        set({
+          currentAssistantId: assistantId,
+          currentThreadId: threadIdx,
         });
       },
 
@@ -243,6 +627,22 @@ export const useChatStore = createPersistStore(
         );
       },
 
+      // currentAssistant() {
+      //     let index = get().currentAssistantId;
+      //     const assistants = get().assistants;
+      //
+      //     return assistants
+      // }
+
+      currentThread() {
+        let threadId = get().currentThreadId;
+        let assistantId = get().currentAssistantId;
+        const assistants = get().assistants;
+        return assistants
+          .find((e) => e.id === assistantId)
+          ?.threads.find((e) => e.id === threadId);
+      },
+
       currentSession() {
         let index = get().currentSessionIndex;
         const sessions = get().sessions;
@@ -266,19 +666,19 @@ export const useChatStore = createPersistStore(
         get().summarizeSession();
       },
 
-      async onUserInput(content: string) {
+      async onUserInputForSession(content: string) {
         const session = get().currentSession();
         const modelConfig = session.mask.modelConfig;
 
         const userContent = fillTemplateWith(content, modelConfig);
         console.log("[User Input] after template: ", userContent);
 
-        const userMessage: ChatMessage = createMessage({
+        const userMessage: ChatMessage = createTempMessage({
           role: "user",
           content: userContent,
         });
 
-        const botMessage: ChatMessage = createMessage({
+        const botMessage: ChatMessage = createTempMessage({
           role: "assistant",
           streaming: true,
           model: modelConfig.model,
@@ -381,7 +781,7 @@ export const useChatStore = createPersistStore(
         const shouldInjectSystemPrompts = modelConfig.enableInjectSystemPrompts;
         const systemPrompts = shouldInjectSystemPrompts
           ? [
-              createMessage({
+              createTempMessage({
                 role: "system",
                 content: fillTemplateWith("", {
                   ...modelConfig,
@@ -485,7 +885,7 @@ export const useChatStore = createPersistStore(
           countMessages(messages) >= SUMMARIZE_MIN_LEN
         ) {
           const topicMessages = messages.concat(
-            createMessage({
+            createTempMessage({
               role: "user",
               content: Locale.Store.Prompt.Topic,
             }),
@@ -541,7 +941,7 @@ export const useChatStore = createPersistStore(
         ) {
           api.llm.chat({
             messages: toBeSummarizedMsgs.concat(
-              createMessage({
+              createTempMessage({
                 role: "system",
                 content: Locale.Store.Prompt.Summarize,
                 date: "",
@@ -581,6 +981,18 @@ export const useChatStore = createPersistStore(
         const index = get().currentSessionIndex;
         updater(sessions[index]);
         set(() => ({ sessions }));
+      },
+
+      updateCurrentThread(updater: (thread?: ChatGPTThread) => void) {
+        const assistants = get().assistants;
+        const currentAssistantId = get().currentAssistantId;
+        const currentThreadId = get().currentThreadId;
+        updater(
+          assistants
+            .find((e) => e.id === currentAssistantId)
+            ?.threads.find((e) => e.id === currentThreadId),
+        );
+        set(() => ({ assistants }));
       },
 
       clearAllData() {

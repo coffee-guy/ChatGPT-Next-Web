@@ -6,9 +6,15 @@ import {
   REQUEST_TIMEOUT_MS,
   ServiceProvider,
 } from "@/app/constant";
-import { useAccessStore, useAppConfig, useChatStore } from "@/app/store";
+import {
+  ChatMessage,
+  ChatStat,
+  useAccessStore,
+  useAppConfig,
+  useChatStore,
+} from "@/app/store";
 
-import { ChatOptions, getHeaders, LLMApi, LLMModel, LLMUsage } from "../api";
+import { ChatOptions, getHeaders, LLMModel, LLMUsage } from "../api";
 import Locale from "../../locales";
 import {
   EventStreamContentType,
@@ -17,6 +23,8 @@ import {
 import { prettyObject } from "@/app/utils/format";
 import { getClientConfig } from "@/app/config/client";
 import { makeAzurePath } from "@/app/azure";
+import { Mask } from "@/app/store/mask";
+import { camelizeKeys, decamelizeKeys } from "humps";
 
 export interface OpenAIListModelResponse {
   object: string;
@@ -27,10 +35,648 @@ export interface OpenAIListModelResponse {
   }>;
 }
 
-export class ChatGPTApi implements LLMApi {
+export interface ListAssistantRequest {}
+
+export interface ChatGPTMessageFile {
+  id: string;
+  object: string;
+  createAt: number;
+  messageId: string;
+}
+
+export interface ChatGPTRunObject {
+  id: string;
+  object: string;
+  created_at: number;
+  assistant_id: string[];
+  thread_id: string;
+  status: string;
+  started_at: number;
+  expires_at?: number;
+  cancelled_at?: number;
+  failed_at?: number;
+  completed_at?: number;
+  last_error?: string;
+  model: string;
+  instructions?: string;
+  metadata?: {};
+}
+
+export interface ChatGPTMessageContent {
+  type: string;
+  imageFile?: {
+    fileId: string;
+  };
+  text?: {
+    value: string;
+    annotations?: [];
+  };
+}
+
+export interface ChatGPTMessage {
+  id: string;
+  createdAt: number;
+  threadId: string;
+  role: string;
+  content: ChatGPTMessageContent[];
+  assistantId?: string;
+  runId?: string;
+  fileIds?: string[];
+  metadata?: {};
+  preview?: boolean;
+  streaming?: false;
+}
+
+export interface PageableResponse {
+  firstId: string;
+  lastId: string;
+  hasMore: boolean;
+}
+
+export interface OpenAIListMessagesResponse extends PageableResponse {
+  object: string;
+  data: ChatGPTMessage[];
+}
+
+export interface ChatGPTThread extends OpenAIListMessagesResponse {
+  id: string;
+  topic?: string;
+  object: string;
+  createdAt: number;
+  metaData: {};
+}
+
+export interface ChatGPTAssistant {
+  id: string;
+  object: string;
+  createdAt: number;
+  description?: string;
+  model: string;
+  instructions?: string;
+  name: string;
+  tools?: string[];
+  fileIds?: string[];
+  threads: ChatGPTThread[];
+}
+
+export interface ChatGPTFile {
+  id: string;
+  bytes: number;
+  createdAt: number;
+  filename: string;
+  object: string;
+  purpose: string;
+}
+
+export interface OpenAIListAssistantResponse extends PageableResponse {
+  object: string;
+  data: Array<ChatGPTAssistant>;
+}
+
+export interface ChatGPTBaseDeleteResponse {
+  id: string;
+  object: string;
+  deleted: boolean;
+}
+
+export class ChatGPTApi {
   private disableListModels = true;
 
-  path(path: string): string {
+  async listFiles() {
+    let finalPath = this.path(OpenaiPath.FilePath);
+    console.log("listFiles:", finalPath);
+    const res = await fetch(finalPath, {
+      method: "GET",
+      headers: {
+        ...getHeaders(),
+      },
+    });
+
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const result = camelizeKeys(await res.json())["data"] as ChatGPTFile[];
+      console.log("[OPENAI] listFiles|OK|:", result);
+      return result;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] listFiles|FAIL|", errorInfo.message);
+
+      throw new Error(`Error listFiles: ${errorInfo.message}`);
+    }
+  }
+
+  async uploadFile(rep: { file: File; purpose: string }) {
+    let finalPath = this.path(OpenaiPath.FilePath);
+    console.log("uploadFile:", finalPath);
+    // 创建一个 FormData 实例
+    const formData = new FormData();
+    // 添加文件
+    formData.append("file", rep.file);
+    // 添加其他表单字段
+    formData.append("purpose", rep.purpose);
+
+    const res = await fetch(finalPath, {
+      method: "POST",
+      body: formData,
+      headers: {
+        ...getHeaders(),
+      },
+    });
+
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      console.log("[OPENAI] uploadFile|OK|:", res);
+      const result = camelizeKeys(await res.json()) as ChatGPTFile;
+      return result;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      console.error("[OPENAI] uploadFile|FAIL|", res);
+      const errorInfo = await res.json();
+
+      throw new Error(`Error uploadFile: ${errorInfo.message}`);
+    }
+  }
+
+  async deleteFile(fileId: string) {
+    let finalPath = this.path(OpenaiPath.FilePath, fileId);
+    console.log("deleteFile:", finalPath);
+    const res = await fetch(finalPath, {
+      method: "DELETE",
+      headers: {
+        ...getHeaders(),
+      },
+    });
+
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const result = camelizeKeys(
+        await res.json(),
+      ) as ChatGPTBaseDeleteResponse;
+      console.log("[OPENAI] deleteFile|OK|:", result);
+      return result;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] deleteFile|FAIL|", errorInfo.message);
+
+      throw new Error(`Error deleteFile: ${errorInfo.message}`);
+    }
+  }
+
+  async createAssistant(assistant: {
+    name?: string;
+    description?: string;
+    instructions?: string;
+    model: string;
+    fileIds?: string[];
+    tools?: { type: string }[];
+  }) {
+    const res = await fetch(this.path(OpenaiPath.AssistantPath), {
+      method: "POST",
+      body: JSON.stringify(decamelizeKeys(assistant)),
+      headers: {
+        ...getHeaders(),
+      },
+    });
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const assist = camelizeKeys(await res.json()) as ChatGPTAssistant;
+      console.log("[OPENAI] createAssistant|OK|:", assist);
+      return assist;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] createAssistant|FAIL|", errorInfo.message);
+
+      throw new Error(`Error creating new assistant: ${errorInfo.message}`);
+    }
+  }
+
+  async retrieveAssistant(assistantId: string) {
+    console.log("[OPENAI] retrieveAssistant|id:", assistantId);
+    const res = await fetch(this.path(OpenaiPath.AssistantPath, assistantId), {
+      method: "GET",
+      headers: {
+        ...getHeaders(),
+      },
+    });
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const assist = camelizeKeys(await res.json()) as ChatGPTAssistant;
+      console.log("[OPENAI] retrieveAssistant|OK|:", assist);
+      return assist;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] retrieveAssistant|FAIL|", errorInfo.message);
+      throw new Error(`Error creating new assistant: ${errorInfo.message}`);
+    }
+  }
+
+  async modifyAssistant(assistant: ChatGPTAssistant) {
+    console.log("[OPENAI] modify|id:", assistant);
+    const res = await fetch(this.path(OpenaiPath.AssistantPath, assistant.id), {
+      method: "POST",
+      body: JSON.stringify(decamelizeKeys(assistant)),
+      headers: {
+        ...getHeaders(),
+      },
+    });
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const assist = camelizeKeys(await res.json()) as ChatGPTAssistant;
+      console.log("[OPENAI] modifyAssistant|OK|:", assist);
+      return assist;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] modifyAssistant|FAIL|", errorInfo.message);
+
+      throw new Error(`Error creating new assistant: ${errorInfo.message}`);
+    }
+  }
+
+  async listAssistants() {
+    let finalPath = this.path(OpenaiPath.AssistantPath);
+    console.log("getAssistant:", finalPath);
+    const res = await fetch(finalPath, {
+      method: "GET",
+      headers: {
+        ...getHeaders(),
+      },
+    });
+
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const result = camelizeKeys(
+        await res.json(),
+      ) as OpenAIListAssistantResponse;
+      console.log("[OPENAI] listAssistants|OK|:", result);
+      return result;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] listAssistants|FAIL|", errorInfo.message);
+
+      throw new Error(`Error listAssistants: ${errorInfo.message}`);
+    }
+  }
+
+  async deleteAssistant(assistant: ChatGPTAssistant) {
+    const res = await fetch(this.path(OpenaiPath.AssistantPath, assistant.id), {
+      method: "DELETE",
+      headers: {
+        ...getHeaders(),
+      },
+    });
+
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const result = camelizeKeys(
+        await res.json(),
+      ) as ChatGPTBaseDeleteResponse;
+      console.log("[OPENAI] deleteAssistant|OK|:", result);
+      return result;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] deleteAssistant|FAIL|", errorInfo.message);
+      throw new Error(`Error deleting new thread: ${errorInfo.message}`);
+    }
+  }
+
+  async createThread() {
+    const res = await fetch(this.path(OpenaiPath.ThreadPath), {
+      method: "POST",
+      headers: {
+        ...getHeaders(),
+      },
+    });
+
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const thread = camelizeKeys(await res.json()) as ChatGPTThread;
+      console.log("[OPENAI] createThread|OK|:", thread);
+      return thread;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] createThread|FAIL|", errorInfo.message);
+      throw new Error(`Error createThread: ${errorInfo.message}`);
+    }
+  }
+
+  async deleteThread(threadId: string) {
+    const res = await fetch(this.path(OpenaiPath.ThreadPath, threadId), {
+      method: "DELETE",
+      headers: {
+        ...getHeaders(),
+      },
+    });
+
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const result = camelizeKeys(
+        await res.json(),
+      ) as ChatGPTBaseDeleteResponse;
+      console.log("[OPENAI] deleteThread|OK|:", result);
+      return result;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] deleteThread|FAIL|", errorInfo.message);
+      throw new Error(`Error deleteThread: ${errorInfo.message}`);
+    }
+  }
+
+  async retrieveThread(threadId: string) {
+    const res = await fetch(this.path(OpenaiPath.ThreadPath, threadId), {
+      method: "GET",
+      headers: {
+        ...getHeaders(),
+      },
+    });
+
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const thread = camelizeKeys(await res.json()) as ChatGPTThread;
+      console.log("[OPENAI] retrieveThread|OK|:", thread);
+      return thread;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] retrieveThread|FAIL|", errorInfo.message);
+      throw new Error(`Error retrieveThread: ${errorInfo.message}`);
+    }
+  }
+
+  async createMessage(threadId: string, content: string) {
+    let payload = {
+      role: "user",
+      content: content,
+    };
+
+    const res = await fetch(
+      this.path(OpenaiPath.ThreadPath, threadId, "messages"),
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: {
+          ...getHeaders(),
+        },
+      },
+    );
+
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const message = camelizeKeys(await res.json()) as ChatGPTMessage;
+      console.log("[OPENAI] createMessage|OK|:", message);
+      return message;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] createMessage|FAIL|", errorInfo.message);
+      throw new Error(`Error createMessage: ${errorInfo.message}`);
+    }
+  }
+
+  async retrieveMessage(threadId: string, messageId: string) {
+    const res = await fetch(
+      this.path(OpenaiPath.ThreadPath, threadId, "messages", messageId),
+      {
+        method: "GET",
+        headers: {
+          ...getHeaders(),
+        },
+      },
+    );
+
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const message = camelizeKeys(await res.json()) as ChatGPTMessage;
+      console.log("[OPENAI] retrieveMessage|OK|:", message);
+      return message;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] retrieveMessage|FAIL|", errorInfo.message);
+      throw new Error(`Error retrieveMessage: ${errorInfo.message}`);
+    }
+  }
+
+  async listMessages(request: {
+    threadId: string;
+    limit?: string;
+    order?: string;
+    before?: string;
+    after?: string;
+  }) {
+    // 构建查询参数字符串
+    const queryParams = new URLSearchParams();
+    if (request.limit) queryParams.append("limit", request.limit);
+    if (request.order) queryParams.append("order", request.order);
+    if (request.before) queryParams.append("before", request.before);
+    if (request.after) queryParams.append("after", request.after);
+
+    // 构建完整的URL，包括路径参数和查询参数
+    const url = `${this.path(
+      OpenaiPath.ThreadPath,
+      request.threadId,
+      "messages",
+    )}?${queryParams.toString()}`;
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        ...getHeaders(),
+      },
+    });
+
+    if (res.ok) {
+      // 请求成功，返回解析后的JSON
+      const response = camelizeKeys(
+        await res.json(),
+      ) as OpenAIListMessagesResponse;
+      console.log("[OPENAI] listMessages|OK|", response);
+      return response;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] listMessages|FAIL|", errorInfo.message);
+      throw new Error(`Error listMessages: ${errorInfo.message}`);
+    }
+  }
+
+  async retrieveMessageFile(
+    threadId: string,
+    messageId: string,
+    fileId: string,
+  ) {
+    const res = await fetch(
+      this.path(
+        OpenaiPath.ThreadPath,
+        threadId,
+        "messages",
+        messageId,
+        "files",
+        fileId,
+      ),
+      {
+        method: "GET",
+        headers: {
+          ...getHeaders(),
+        },
+      },
+    );
+
+    if (res.ok) {
+      const file = camelizeKeys(await res.json()) as ChatGPTMessageFile;
+      console.log("[OPENAI] retrieveMessageFile|OK|", file);
+      return file;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] retrieveMessageFile|FAIL|", errorInfo.message);
+      throw new Error(`Error retrieveMessageFile: ${errorInfo.message}`);
+    }
+  }
+
+  async listMessageFiles(request: {
+    threadId: string;
+    messageId: string;
+    limit?: string;
+    order?: string;
+    before?: string;
+    after?: string;
+  }) {
+    // 构建查询参数字符串
+    const queryParams = new URLSearchParams();
+    if (request.limit) queryParams.append("limit", request.limit);
+    if (request.order) queryParams.append("order", request.order);
+    if (request.before) queryParams.append("before", request.before);
+    if (request.after) queryParams.append("after", request.after);
+
+    // 构建完整的URL，包括路径参数和查询参数
+    const url = `${this.path(
+      OpenaiPath.ThreadPath,
+      request.threadId,
+      "messages",
+      request.messageId,
+      "files",
+    )}?${queryParams.toString()}`;
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        ...getHeaders(),
+      },
+    });
+
+    if (res.ok) {
+      const files = camelizeKeys(await res.json()) as Array<ChatGPTMessageFile>;
+      console.log("[OPENAI] listMessageFiles|OK|", files);
+      return files;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] listMessageFiles|FAIL|", errorInfo.message);
+      throw new Error(`Error listMessageFiles: ${errorInfo.message}`);
+    }
+  }
+
+  async createRun(threadId: string, assistantId: string) {
+    let payload = {
+      assistant_id: assistantId,
+    };
+
+    const res = await fetch(
+      this.path(OpenaiPath.ThreadPath, threadId, "runs"),
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: {
+          ...getHeaders(),
+        },
+      },
+    );
+
+    if (res.ok) {
+      const run = camelizeKeys(await res.json()) as ChatGPTRunObject;
+      console.log("[OPENAI] createRun|OK|", run);
+      return run;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] createRun|FAIL|", errorInfo.message);
+      throw new Error(`Error createRun: ${errorInfo.message}`);
+    }
+  }
+
+  async retrieveRun(threadId: string, runId: string) {
+    const res = await fetch(
+      this.path(OpenaiPath.ThreadPath, threadId, "runs", runId),
+      {
+        method: "GET",
+        headers: {
+          ...getHeaders(),
+        },
+      },
+    );
+
+    if (res.ok) {
+      const run = camelizeKeys(await res.json()) as ChatGPTRunObject;
+      console.log("[OPENAI] retrieveRun|OK|", run);
+      return run;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] retrieveRun|FAIL|", errorInfo.message);
+      throw new Error(`Error retrieveRun: ${errorInfo.message}`);
+    }
+  }
+
+  async listRuns(request: {
+    threadId: string;
+    limit?: string;
+    order?: string;
+    before?: string;
+    after?: string;
+  }) {
+    // 构建查询参数字符串
+    const queryParams = new URLSearchParams();
+    if (request.limit) queryParams.append("limit", request.limit);
+    if (request.order) queryParams.append("order", request.order);
+    if (request.before) queryParams.append("before", request.before);
+    if (request.after) queryParams.append("after", request.after);
+
+    // 构建完整的URL，包括路径参数和查询参数
+    const url = `${this.path(
+      OpenaiPath.ThreadPath,
+      request.threadId,
+      "runs",
+    )}?${queryParams.toString()}`;
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        ...getHeaders(),
+      },
+    });
+
+    if (res.ok) {
+      const runs = camelizeKeys(await res.json()) as Array<ChatGPTRunObject>;
+      console.log("[OPENAI] listRuns|OK|", runs);
+      return runs;
+    } else {
+      // 请求失败，抛出错误或返回错误信息
+      const errorInfo = await res.json();
+      console.error("[OPENAI] listRuns|FAIL|", errorInfo.message);
+      throw new Error(`Error listRuns: ${errorInfo.message}`);
+    }
+  }
+
+  path(...path: string[]): string {
+    let totalPath = path.join("/");
     const accessStore = useAccessStore.getState();
 
     const isAzure = accessStore.provider === ServiceProvider.Azure;
@@ -56,10 +702,12 @@ export class ChatGPTApi implements LLMApi {
     }
 
     if (isAzure) {
-      path = makeAzurePath(path, accessStore.azureApiVersion);
+      totalPath = makeAzurePath(totalPath, accessStore.azureApiVersion);
     }
+    console.log("baseUrl:", baseUrl);
+    console.log("path:", totalPath);
 
-    return [baseUrl, path].join("/");
+    return [baseUrl, totalPath].join("/");
   }
 
   extractMessage(res: any) {
@@ -100,6 +748,7 @@ export class ChatGPTApi implements LLMApi {
 
     try {
       const chatPath = this.path(OpenaiPath.ChatPath);
+      console.log("chat path:", chatPath);
       const chatPayload = {
         method: "POST",
         body: JSON.stringify(requestPayload),
@@ -155,7 +804,7 @@ export class ChatGPTApi implements LLMApi {
             clearTimeout(requestTimeoutId);
             const contentType = res.headers.get("content-type");
             console.log(
-              "[OpenAI] request response content type: ",
+              "[OPENAI] request response content type: ",
               contentType,
             );
 
@@ -234,6 +883,7 @@ export class ChatGPTApi implements LLMApi {
       options.onError?.(e as Error);
     }
   }
+
   async usage() {
     const formatDate = (d: Date) =>
       `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d
@@ -326,4 +976,5 @@ export class ChatGPTApi implements LLMApi {
     }));
   }
 }
+
 export { OpenaiPath };

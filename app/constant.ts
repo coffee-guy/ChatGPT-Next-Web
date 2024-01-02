@@ -19,6 +19,9 @@ export enum Path {
   NewChat = "/new-chat",
   Masks = "/masks",
   Auth = "/auth",
+  NewAssist = "/new-assist",
+  ThreadChat = "/threadchat",
+  Files = "/files",
 }
 
 export enum ApiPath {
@@ -72,6 +75,9 @@ export const OpenaiPath = {
   UsagePath: "dashboard/billing/usage",
   SubsPath: "dashboard/billing/subscription",
   ListModelPath: "v1/models",
+  AssistantPath: "v1/assistants",
+  ThreadPath: "v1/threads",
+  FilePath: "v1/files",
 };
 
 export const Azure = {

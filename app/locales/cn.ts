@@ -20,6 +20,7 @@ const cn = {
   },
   ChatItem: {
     ChatItemCount: (count: number) => `${count} 条对话`,
+    ThreadItemCount: (count: number) => `${count} 条Thread`,
   },
   Chat: {
     SubTitle: (count: number) => `共 ${count} 条对话`,
@@ -80,6 +81,29 @@ const cn = {
     },
     IsContext: "预设提示词",
   },
+  Assistant: {
+    Create: {
+      Title: "Assistant",
+      SubTitle: "创建新的Assistant",
+    },
+    Name: {
+      Title: "Assistant名称",
+    },
+    Description: {
+      Title: "Assistant描述",
+    },
+    Instruction: {
+      Title: "Assistant Instruction",
+      SubTitle: "Instruction对assistant下的所有线程都有效",
+    },
+    Files: {
+      Title: "关联文件ids",
+      SubTitle: "以英文逗号分隔",
+    },
+    Tools: {
+      Title: "工具选择(多选)",
+    },
+  },
   Export: {
     Title: "分享聊天记录",
     Copy: "全部复制",
@@ -122,7 +146,18 @@ const cn = {
     NewChat: "新的聊天",
     DeleteChat: "确认删除选中的对话？",
     DeleteToast: "已删除会话",
+    DeleteAssistantSuccessToast: (name: string) => {
+      return "已删除Assistant:[" + name + "]";
+    },
+    DeleteAssistantFailToast: "删除Assistant失败",
     Revert: "撤销",
+    DeleteAssistant: "确认删除选中的Assistant？",
+    CreateThreadFail: "创建Thread失败",
+    DeleteThreadFail: "删除Thread失败",
+  },
+  FileManager: {
+    Title: "文件列表",
+    SubTitle: "上传或删除文件",
   },
   Settings: {
     Title: "设置",
@@ -441,9 +476,9 @@ const cn = {
     Config: "配置",
   },
   Exporter: {
-    Description : {
-      Title: "只有清除上下文之后的消息会被展示"
-    },  
+    Description: {
+      Title: "只有清除上下文之后的消息会被展示",
+    },
     Model: "模型",
     Messages: "消息",
     Topic: "主题",

@@ -53,6 +53,7 @@ export async function requestOpenai(req: NextRequest) {
   }
 
   const fetchUrl = `${baseUrl}/${path}`;
+
   const fetchOptions: RequestInit = {
     headers: {
       "Content-Type": "application/json",
@@ -61,6 +62,7 @@ export async function requestOpenai(req: NextRequest) {
       ...(serverConfig.openaiOrgId && {
         "OpenAI-Organization": serverConfig.openaiOrgId,
       }),
+      "OpenAI-Beta": "assistants=v1",
     },
     method: req.method,
     body: req.body,
@@ -96,11 +98,14 @@ export async function requestOpenai(req: NextRequest) {
         );
       }
     } catch (e) {
-      console.error("[OpenAI] gpt4 filter", e);
+      console.error("[OPENAI] gpt4 filter", e);
     }
   }
 
   try {
+    console.log("[mad]fetchUrl:", fetchUrl);
+    console.log("[mad]fetchOptions:", fetchOptions);
+
     const res = await fetch(fetchUrl, fetchOptions);
 
     // to prevent browser prompt for credentials
