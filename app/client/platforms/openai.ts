@@ -175,25 +175,26 @@ export class ChatGPTApi {
     formData.append("file", rep.file);
     // 添加其他表单字段
     formData.append("purpose", rep.purpose);
+    const headers = getHeaders();
+    delete headers["Content-Type"]; // 删除 Content-Type 属性const headers = getHeaders();
 
     const res = await fetch(finalPath, {
       method: "POST",
       body: formData,
       headers: {
-        ...getHeaders(),
+        ...headers,
       },
     });
 
     if (res.ok) {
       // 请求成功，返回解析后的JSON
-      console.log("[OPENAI] uploadFile|OK|:", res);
       const result = camelizeKeys(await res.json()) as ChatGPTFile;
+      console.log("[OPENAI] uploadFile|OK|:", result);
       return result;
     } else {
       // 请求失败，抛出错误或返回错误信息
-      console.error("[OPENAI] uploadFile|FAIL|", res);
       const errorInfo = await res.json();
-
+      console.error("[OPENAI] uploadFile|FAIL|", res);
       throw new Error(`Error uploadFile: ${errorInfo.message}`);
     }
   }
@@ -973,6 +974,11 @@ export class ChatGPTApi {
     return chatModels.map((m) => ({
       name: m.id,
       available: true,
+      provider: {
+        id: "openai",
+        providerName: "OpenAI",
+        providerType: "openai",
+      },
     }));
   }
 }

@@ -51,11 +51,13 @@ export function FileManager() {
   };
 
   // TODO: Implement handleFileUpload method to handle file uploads
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     // Handle file upload and update state
     const file = event.target.files?.[0];
     if (file) {
-      chatStore.uploadFile(file);
+      await chatStore.uploadFile(file);
     }
   };
 

@@ -1,6 +1,6 @@
 import { type OpenAIListModelResponse } from "@/app/client/platforms/openai";
 import { getServerSideConfig } from "@/app/config/server";
-import { OpenaiPath } from "@/app/constant";
+import { ModelProvider, OpenaiPath } from "@/app/constant";
 import { prettyObject } from "@/app/utils/format";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "../../auth";
@@ -54,7 +54,7 @@ async function handle(
     );
   }
 
-  const authResult = auth(req);
+  const authResult = auth(req, ModelProvider.GPT);
   if (authResult.error) {
     return NextResponse.json(authResult, {
       status: 401,
@@ -63,6 +63,8 @@ async function handle(
 
   try {
     const response = await requestOpenai(req);
+    console.log("mad7777", response);
+    console.log("=============");
 
     // list models
     if (subpath === OpenaiPath.ListModelPath && response.status === 200) {
@@ -72,6 +74,8 @@ async function handle(
         status: response.status,
       });
     }
+    console.log("mad666", response.json);
+    console.log("mad666", response.status);
 
     return response;
   } catch (e) {

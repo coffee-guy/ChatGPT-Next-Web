@@ -15,13 +15,14 @@ const en: LocaleType = {
   Auth: {
     Title: "Need Access Code",
     Tips: "Please enter access code below",
-    SubTips: "Or enter your OpenAI API Key",
+    SubTips: "Or enter your OpenAI or Google API Key",
     Input: "access code",
     Confirm: "Confirm",
     Later: "Later",
   },
   ChatItem: {
     ChatItemCount: (count: number) => `${count} messages`,
+    ThreadItemCount: (count: number) => `${count} threads`,
   },
   Chat: {
     SubTitle: (count: number) => `${count} messages`,
@@ -82,6 +83,29 @@ const en: LocaleType = {
     },
     IsContext: "Contextual Prompt",
   },
+  Assistant: {
+    Create: {
+      Title: "Assistant",
+      SubTitle: "create new assistant",
+    },
+    Name: {
+      Title: "Assistant name",
+    },
+    Description: {
+      Title: "Assistant desc",
+    },
+    Instruction: {
+      Title: "Assistant Instruction",
+      SubTitle: "Instruction works for all threads belong to assistant",
+    },
+    Files: {
+      Title: "File ids",
+      SubTitle: "separate by coma",
+    },
+    Tools: {
+      Title: "Tools(multi selecte)",
+    },
+  },
   Export: {
     Title: "Export Messages",
     Copy: "Copy All",
@@ -125,7 +149,18 @@ const en: LocaleType = {
     NewChat: "New Chat",
     DeleteChat: "Confirm to delete the selected conversation?",
     DeleteToast: "Chat Deleted",
+    DeleteAssistantSuccessToast: (name: string) => {
+      return "delete Assistant:[" + name + "]";
+    },
+    DeleteAssistantFailToast: "fail to delete Assistant",
     Revert: "Revert",
+    DeleteAssistant: "confirm delete？",
+    CreateThreadFail: "create Thread fail",
+    DeleteThreadFail: "delete Thread fail",
+  },
+  FileManager: {
+    Title: "File list",
+    SubTitle: "upload or delete file",
   },
   Settings: {
     Title: "Settings",
@@ -319,6 +354,24 @@ const en: LocaleType = {
         Title: "Custom Models",
         SubTitle: "Custom model options, seperated by comma",
       },
+      Google: {
+        ApiKey: {
+          Title: "API Key",
+          SubTitle:
+            "Bypass password access restrictions using a custom Google AI Studio API Key",
+          Placeholder: "Google AI Studio API Key",
+        },
+
+        Endpoint: {
+          Title: "Endpoint Address",
+          SubTitle: "Example:",
+        },
+
+        ApiVerion: {
+          Title: "API Version (gemini-pro api version)",
+          SubTitle: "Select a specific part version",
+        },
+      },
     },
 
     Model: "Model",
@@ -353,7 +406,7 @@ const en: LocaleType = {
       History: (content: string) =>
         "This is a summary of the chat history as a recap: " + content,
       Topic:
-        "Please generate a four to five word title summarizing our conversation without any lead-in, punctuation, quotation marks, periods, symbols, or additional text. Remove enclosing quotation marks.",
+        "Please generate a four to five word title summarizing our conversation without any lead-in, punctuation, quotation marks, periods, symbols, bold text, or additional text. Remove enclosing quotation marks.",
       Summarize:
         "Summarize the discussion briefly in 200 words or less to use as a prompt for future context.",
     },
@@ -443,8 +496,8 @@ const en: LocaleType = {
   },
   Exporter: {
     Description: {
-      Title: "Only messages after clearing the context will be displayed"
-    },  
+      Title: "Only messages after clearing the context will be displayed",
+    },
     Model: "Model",
     Messages: "Messages",
     Topic: "Topic",
