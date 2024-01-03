@@ -103,7 +103,7 @@ import {
   ChatGPTThread,
 } from "@/app/client/platforms/openai";
 import { nanoid } from "nanoid";
-import { api } from "@/app/client/api";
+import { ClientApi } from "@/app/client/api";
 import ShareIcon from "@/app/icons/share.svg";
 
 const Markdown = dynamic(async () => (await import("./markdown")).Markdown, {

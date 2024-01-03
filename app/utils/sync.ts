@@ -1,13 +1,9 @@
-import {
-  ChatSession,
-  useAccessStore,
-  useAppConfig,
-  useChatStore,
-} from "../store";
+import { useAccessStore, useAppConfig, useChatStore } from "../store";
 import { useMaskStore } from "../store/mask";
 import { usePromptStore } from "../store/prompt";
 import { StoreKey } from "../constant";
 import { merge } from "./merge";
+import { ChatSession } from "@/app/client/api";
 
 type NonFunctionKeys<T> = {
   [K in keyof T]: T[K] extends (...args: any[]) => any ? never : K;
