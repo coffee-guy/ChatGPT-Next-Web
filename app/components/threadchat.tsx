@@ -254,6 +254,11 @@ function _Chat() {
   const [hitBottom, setHitBottom] = useState(true);
   const isMobileScreen = useMobileScreen();
 
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder>();
+  const [audioBlob, setAudioBlob] = useState<Blob>();
+  const [transcription, setTranscription] = useState("");
+
   // auto grow input
   const [inputRows, setInputRows] = useState(2);
   const measure = useDebouncedCallback(
@@ -279,6 +284,57 @@ function _Chat() {
   const SEARCH_TEXT_LIMIT = 30;
   const onInput = (text: string) => {
     setUserInput(text);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (event) => {
+        setAudioBlob(event.data);
+      };
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Error accessing the microphone", error);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const uploadAudioAndTranscribe = async () => {
+    if (!audioBlob) return;
+
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new File([audioBlob], "audio.mp3", { type: "audio/mp3" }),
+    );
+    formData.append("model", "whisper-1");
+
+    try {
+      const response = await fetch(
+        "https://api.openai.com/v1/audio/transcriptions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          },
+          body: formData,
+        },
+      );
+
+      const data = await response.json();
+      setTranscription(data.choices[0].text); // Adjust this according to the actual response structure
+    } catch (error) {
+      console.error("Error uploading audio and transcribing", error);
+    }
   };
 
   const doSubmit = async (userInput: string) => {
@@ -656,6 +712,13 @@ function _Chat() {
             onClick={() => doSubmit(userInput)}
           />
         </div>
+        <button onClick={isRecording ? stopRecording : startRecording}>
+          {isRecording ? "Stop Recording" : "Start Recording"}
+        </button>
+        <button onClick={uploadAudioAndTranscribe} disabled={!audioBlob}>
+          Transcribe Audio
+        </button>
+        {transcription && <p>Transcription: {transcription}</p>}
       </div>
 
       {showExport && (
