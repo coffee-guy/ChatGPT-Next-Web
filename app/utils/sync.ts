@@ -4,6 +4,7 @@ import { usePromptStore } from "../store/prompt";
 import { StoreKey } from "../constant";
 import { merge } from "./merge";
 import { ChatSession } from "@/app/client/api";
+import {ChatGPTAssistant, ChatGPTThread} from "@/app/client/platforms/openai";
 
 type NonFunctionKeys<T> = {
   [K in keyof T]: T[K] extends (...args: any[]) => any ? never : K;
@@ -93,6 +94,73 @@ const MergeStates: StateMerger = {
       (a, b) =>
         new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime(),
     );
+
+    //merge assistant
+    const localAssistant: Record<string, ChatGPTAssistant> = {};
+    localState.assistants.forEach((s) => (localAssistant[s.id] = s));
+
+    remoteState.assistants.forEach((remoteAssis) => {
+      // skip empty assistant
+      if (remoteAssis.threads.length === 0) return;
+
+
+      const localAssistantElement = localAssistant[remoteAssis.id];
+      if (!localAssistantElement) {
+        // if remote assistant is new, just merge it
+        localState.assistants.unshift(remoteAssis);
+      } else {
+        // if both have the same assistant id, merge the threads
+        const localThread: Record<string, ChatGPTThread> = {};
+        const localThreadIds = new Set()
+
+        localAssistantElement.threads.map((t) => {
+          localThread[t.id] = t;
+          localThreadIds.add(t.id)
+        });
+
+        remoteAssis.threads.forEach((t) => {
+          if (!localThreadIds.has(t.id)) {
+            //如果远端assistant中thread本地没有,直接插入
+            localAssistantElement.threads.unshift(t);
+          }else{
+            //如果thread存在，则merge 消息
+            //先去重,云端缓存如果有bug,重复消息的话这一步去掉
+            // 使用Set来记录已经出现过的id
+            const seenMessageIds = new Set<string>();
+
+            const uniqueList = t.data.filter(item => {
+              if (seenMessageIds.has(item.id)) {
+                // 如果id已经出现过，则过滤掉这个元素
+                return false;
+              } else {
+                // 如果id是第一次出现，加入到Set中，并保留这个元素
+                seenMessageIds.add(item.id);
+                return true;
+              }
+            });
+
+            const localMessageIds = new Set(localThread[t.id].data.map((v) => v.id));
+            uniqueList.forEach((t) => {
+              if (!localMessageIds.has(t.id)) {
+                //如果远端消息,本地thread的消息没有,直接插入
+                localThread[t.id].data.push(t);
+              }
+
+              //排序消息
+              // sort local messages with date field in asc order
+              localThread[t.id].data.sort(
+                  (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+              );
+            });
+          }
+        });
+
+        // // sort local messages with date field in asc order
+        // localSession.messages.sort(
+        //     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+        // );
+      }
+    });
 
     return localState;
   },

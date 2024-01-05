@@ -68,7 +68,15 @@ export async function requestOpenai(req: NextRequest) {
   const fetchUrl = `${baseUrl}/${path}`;
 
   const fetchOptions: RequestInit = {
-    headers: req.headers,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      [authHeaderName]: authValue,
+      ...(serverConfig.openaiOrgId && {
+        "OpenAI-Organization": serverConfig.openaiOrgId,
+      }),
+      "OpenAI-Beta": "assistants=v1",
+    },
     method: req.method,
     body: req.body,
     // to fix #2485: https://stackoverflow.com/questions/55920957/cloudflare-worker-typeerror-one-time-use-body

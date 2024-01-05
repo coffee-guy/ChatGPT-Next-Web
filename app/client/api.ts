@@ -171,7 +171,6 @@ export function getHeaders() {
     "Content-Type": "application/json",
     "x-requested-with": "XMLHttpRequest",
     "OpenAI-Beta": "assistants=v1",
-    Accept: "application/json",
   };
   const modelConfig = useChatStore.getState().currentSession().mask.modelConfig;
   const isGoogle = modelConfig.model === "gemini-pro";
