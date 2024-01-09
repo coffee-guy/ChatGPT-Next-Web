@@ -86,6 +86,7 @@ export const OpenaiPath = {
   AssistantPath: "v1/assistants",
   ThreadPath: "v1/threads",
   FilePath: "v1/files",
+  TranscriptionPath: "v1/audio/transcriptions",
 };
 
 export const Azure = {

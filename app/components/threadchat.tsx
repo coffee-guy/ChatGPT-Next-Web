@@ -311,30 +311,8 @@ function _Chat() {
     const uploadAudioAndTranscribe = async () => {
         if (!audioBlob) return;
 
-        const formData = new FormData();
-        formData.append(
-            "file",
-            new File([audioBlob], "audio.mp3", {type: "audio/mp3"}),
-        );
-        formData.append("model", "whisper-1");
-
-        try {
-            const response = await fetch(
-                "https://api.openai.com/v1/audio/transcriptions",
-                {
-                    method: "POST",
-                    headers: {
-                        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-                    },
-                    body: formData,
-                },
-            );
-
-            const data = await response.json();
-            setTranscription(data.choices[0].text); // Adjust this according to the actual response structure
-        } catch (error) {
-            console.error("Error uploading audio and transcribing", error);
-        }
+        let res = await chatStore.createAudioTranscriptions(audioBlob);
+        doSubmit(res.text)
     };
 
     const doSubmit = async (userInput: string) => {

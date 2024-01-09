@@ -118,17 +118,17 @@ const MergeStates: StateMerger = {
           localThreadIds.add(t.id)
         });
 
-        remoteAssis.threads.forEach((t) => {
-          if (!localThreadIds.has(t.id)) {
+        remoteAssis.threads.forEach((remoteT) => {
+          if (!localThreadIds.has(remoteT.id)) {
             //如果远端assistant中thread本地没有,直接插入
-            localAssistantElement.threads.unshift(t);
+            localAssistantElement.threads.unshift(remoteT);
           }else{
             //如果thread存在，则merge 消息
             //先去重,云端缓存如果有bug,重复消息的话这一步去掉
             // 使用Set来记录已经出现过的id
             const seenMessageIds = new Set<string>();
 
-            const uniqueList = t.data.filter(item => {
+            const uniqueList = remoteT.data.filter(item => {
               if (seenMessageIds.has(item.id)) {
                 // 如果id已经出现过，则过滤掉这个元素
                 return false;
@@ -139,19 +139,19 @@ const MergeStates: StateMerger = {
               }
             });
 
-            const localMessageIds = new Set(localThread[t.id].data.map((v) => v.id));
-            uniqueList.forEach((t) => {
-              if (!localMessageIds.has(t.id)) {
+            const localMessageIds = new Set(localThread[remoteT.id].data.map((v) => v.id));
+            uniqueList.forEach((remoteM) => {
+              if (!localMessageIds.has(remoteM.id)) {
                 //如果远端消息,本地thread的消息没有,直接插入
-                localThread[t.id].data.push(t);
+                localThread[remoteT.id].data.push(remoteM);
               }
-
-              //排序消息
-              // sort local messages with date field in asc order
-              localThread[t.id].data.sort(
-                  (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-              );
             });
+
+            //排序消息
+            // sort local messages with date field in asc order
+            localThread[remoteT.id].data.sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+            );
           }
         });
 

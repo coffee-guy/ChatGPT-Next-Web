@@ -227,7 +227,7 @@ export const useChatStore = createPersistStore(
                         }
                     });
 
-                    assistantResponse.data.forEach((item) => {
+                    assistantResponse.data?.forEach((item) => {
                         // 检查新数组中是否已经存在具有相同id的元素
                         const existingItem = mergedList.find(
                             (existing) => existing.id === item.id,
@@ -432,6 +432,10 @@ export const useChatStore = createPersistStore(
                         thread?.data.push(createMessageResult);
                     });
                 }
+            },
+
+            async createAudioTranscriptions(audioFile:Blob) {
+                return await api.llm.createAudioTranscriptions(audioFile);
             },
 
             async createRun(assistantId: string, threadId: string) {
